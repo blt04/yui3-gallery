@@ -34,10 +34,11 @@
 //	Util shortcuts
 
 var Env = Y.Env,
-	_config = ((typeof YAHOO_config == "undefined" || !YAHOO_config)?{}:YAHOO_config),
+	UNDEFINED = 'undefined',
+	_config = ((typeof YAHOO_config === UNDEFINED || !YAHOO_config)?{}:YAHOO_config),
 	_base = _config.base || 'http://yui.yahooapis.com/2.8.0r4/build/',
 	_seed = _config.seed || 'yuiloader/yuiloader-min.js',
-	_ready = !(typeof YAHOO == "undefined" || !YAHOO || !YAHOO.util || !YAHOO.util.YUILoader),
+	_ready = !(typeof YAHOO === UNDEFINED || !YAHOO),
 	_loader,
 	_useQueue;
 
@@ -74,9 +75,12 @@ var Env = Y.Env,
  */
 function _initLoader (l) {
 	/* creating the loader object */
-	l.combine = l.combine || true; /* using the Combo Handle by default */
+	if (typeof l.combine === UNDEFINED) {
+	    l.combine = true; /* using the Combo Handle by default */
+	}
 	l.filter = l.filter || 'min';  /* using production mode by default */
-	return (new YAHOO.util.YUILoader(l));	
+	_loader = new YAHOO.util.YUILoader(l);
+	return _loader;
 }
 
 /**
@@ -97,7 +101,7 @@ function _register (name, m) {
 		Env._legacy._useQueue.add ({
 			fn: function () {
 				Y.log ('Registering a module: '+ m.name,'info','YUI2Wrapper');
-				Env._legacy._loader.addModule (m);
+				_loader.addModule (m);
 			},
 			autoContinue: true
 		});
@@ -127,15 +131,16 @@ function _filterConf(o) {
 
 // preparing the queue and loading yui2 loader if needed
 if (!Env._legacy) {
-	Env._legacy = {_useQueue: new Y.AsyncQueue()};
+	_useQueue = new Y.AsyncQueue();
+	Env._legacy = {_useQueue: _useQueue};
 	if (_ready) {
 		// YUI loader is in the page, and we don't need to inject it into the page.
 		Y.log ('YUI 2 Loader is already in the page, don\'t need to be loaded it again.','info','YUI2Wrapper');
-		Env._legacy._loader = _initLoader(_config);
+		Env._legacy._loader = Env._legacy._loader || _initLoader(_config);
 	} else {
 		// loading the loader
 		Y.log ('YUI 2 Loader need to be loaded upfront.','info','YUI2Wrapper');
-		Env._legacy._useQueue.add ({
+		_useQueue.add ({
 			fn: function () {
 				YUI ({
 					modules: {
@@ -147,9 +152,9 @@ if (!Env._legacy) {
 					if (result.success) {
 						Y.log ('YUI 2 Loader is ready to be used.','info','YUI2Wrapper');
 						Env._legacy._loader = _initLoader(_config);
-						Env._legacy._useQueue.run();
+						_useQueue.run();
 					} else {
-						Y.log ('Error trying to include yui 2 loader in the page'),'error','YUI2Wrapper';
+						Y.log ('Error trying to include yui 2 loader in the page','error','YUI2Wrapper');
 					}
 				});
 			},
@@ -158,8 +163,11 @@ if (!Env._legacy) {
 	}
 	// registering the default set of modules defined by YAHOO_config
 	_config = _filterConf(_config);
-	Env._legacy._useQueue.run();
+	_useQueue.run();
 }
+
+_useQueue = Env._legacy._useQueue;
+_loader = Env._legacy._loader;
 
 Y.yui2 = function (o) {
 	o = _filterConf(o);
@@ -183,7 +191,6 @@ Y.yui2 = function (o) {
 
 			_queue.add ({
 				fn: function () {
-					var _loader = Env._legacy._loader;
 					_loader.require(a);
 					Y.log ('Loading modules: '+ a.join(", "),'info','YUI2Wrapper');
 					_loader.insert({
