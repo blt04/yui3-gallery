@@ -154,10 +154,8 @@ Y.mix(Dispatcher, {
     NAME : DISPATCHER,
 
     /**
-     * Static Object hash used to cache requests.
-     *
      * @property Dispatcher._hashtable
-     * @Type Array
+     * @type Array
      * @static
      */
     _hashtable : [],
