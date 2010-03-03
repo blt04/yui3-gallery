@@ -417,4 +417,4 @@ Y.extend(Dispatcher, Y.Base, {
 Y.Dispatcher = Dispatcher;
 
 
-}, '@VERSION@' ,{requires:['base-base', 'node-base', 'io-base', 'get', 'async-queue', 'classnamemanager']});
+}, 'gallery-2010.02.17-20' ,{requires:['base-base', 'node-base', 'io-base', 'get', 'async-queue', 'classnamemanager']});
