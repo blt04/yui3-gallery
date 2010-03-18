@@ -192,8 +192,8 @@ Y.extend(SmartList, Y.Plugin.Base, {
 			this._root = _root;
 			
 			Y.Array.each (ATTRS, function (v) {
-				if (config[ATTR_SORT]) {
-					that.set (ATTR_SORT, config[ATTR_SORT]);
+				if (config[v]) {
+					that.set (v, config[v]);
 				}
 	    	});
 			

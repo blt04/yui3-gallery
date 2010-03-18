@@ -150,7 +150,7 @@ Y.mix(Dispatcher, {
 				return v;
 			},
  			validator: function (v) {
- 	            return (v && isString(v) && (v!=''));
+ 	            return (v && isString(v) && (v!==''));
  	        }
  		},
  		/**
@@ -329,7 +329,9 @@ Y.extend(Dispatcher, Y.Base, {
 	* @return object  Reference to the connection handler
 	*/
 	_fetch: function ( uri, cfg ){
-		if (!uri) return false;
+		if (!uri) {
+			return false;
+		}
 		cfg = cfg || {
 			method: 'GET'
 		};
