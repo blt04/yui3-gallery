@@ -1,6 +1,6 @@
 /**
 * <p>The Dispatcher satisfies a very common need of developers using the 
-* YUI library: dynamic execution of Ajax response content. Typical strategies to 
+* YUI library: dynamic execution of HTML Fragments or remote content. Typical strategies to 
 * fulfill this need, like executing the innerHTML property or referencing remote 
 * scripts, are unreliable due to browser incompatibilities. The Dispatcher normalize 
 * this behavior across all a-grade browsers.
@@ -20,7 +20,7 @@
 * <br>
 *			(new Y.Dispatcher ({<br>
 *				node: '#demoajax',<br>
-*				 content: 'Please wait... (Injecting fragment.html)'<br>
+*				content: 'Please wait... (Injecting fragment.html)'<br>
 *			})).set('uri', 'fragment.html');<br>
 * <br>
 * <br>		
@@ -37,12 +37,10 @@
 */
 
 //	Util shortcuts
-var UA = Y.UA,
-getClassName = Y.ClassNameManager.getClassName,
+var getClassName = Y.ClassNameManager.getClassName,
 
 //	Frequently used strings
 DISPATCHER = "dispatcher",
-PERIOD = ".",
 SC = "script",
 DISPATCHER_FETCH = 'fetch',
 DISPATCHER_PURGE = 'purge',
@@ -58,17 +56,12 @@ ATTR_LOADING = 'loading',
 ATTR_NODE = 'node',
 
 //	CSS class names
-CLASS_DISPATCHER = getClassName(DISPATCHER),
 CLASS_DISPATCHER_LOADING = getClassName(DISPATCHER, 'loading'),
-
-//	CSS selectors
-SELECTOR_DISPATCHER = PERIOD + CLASS_DISPATCHER,
 
 // shorthands
 L = Y.Lang,
 isBoolean = L.isBoolean,
 isString = L.isString,
-isObject = L.isObject,
 
 /**
 	* The Dispatcher class represents an object that can manage Node Elements to
@@ -312,7 +305,7 @@ Y.extend(Dispatcher, Y.Base, {
 		Y.log('dispatching a new content', 'info', DISPATCHER);
 
 		// autopurging children collection
-		if (this.get('autopurge')) {
+		if (this.get(ATTR_AUTOPURGE)) {
 			q.add({
 				fn: function() {
 					Y.log('purging children collection', 'info', DISPATCHER);
