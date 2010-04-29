@@ -7,12 +7,15 @@
  * @module gallery-preload
  */
 
+var _idleQueue = [];
+
 /**
  * Preload images, CSS and JavaScript files without executing them
  * @namespace Y
  * @class preload
  * @static
- * @param files {String|Array} collection of files to be loaded
+ * @param {String|Array} files		Collection of files to be loaded
+ * @return {YUI} Y instance for chaining
  */
 Y.preload = function(files) {
 	var o, ie = Y.UA.ie, doc = Y.config.doc;
@@ -33,4 +36,48 @@ Y.preload = function(files) {
 	        doc.body.appendChild(o);
         }
     });
+	
+	return Y;
+};
+
+/**
+ * Wait until the user become idle to preload files without executing them. It uses 
+ * Idle Timer Module (by Nicholas) to monitor user actions.
+ * @namespace Y
+ * @class preloadOnIdle
+ * @static
+ * @param {Array} files 		Collection of files to be loaded
+ * @param {int} t (Optional) 	A new value for the timeout period in ms.
+ * @return {YUI} Y instance for chaining
+ */
+Y.preloadOnIdle = function(files, t) {
+	// Loading Idle Timer Module (by Nicholas) on-demand to avoid setting it
+	// as a dependency when most of the users will not use it...
+	
+	Y.log("Loading Idle Timer on-demand to preloading files on idle.", "info", "Y.preloadOnIdle");
+	
+	// adding the set of files into the queue
+	_idleQueue.push (files);
+	
+	Y.use('gallery-idletimer', function(Y) {
+	
+	    Y.IdleTimer.subscribe("idle", function(){
+	    	// collecting the first file from the list
+	    	var fs = files.shift();
+	    	if (fs) {
+		    	Y.log("User is idle, lets preload a file", "info", "Y.preloadOnIdle");
+		    	Y.preload(fs);
+	    	} else {
+	    		Y.log("No more files pending for preload, stopping the IdleTimer", "info", "Y.preloadOnIdle");
+	    		Y.IdleTimer.stop();
+	    	}
+	    });
+	
+	    //start the timer with a default timeout of 30s
+	    Y.log("Starting the timer: "+t, "info", "Y.preloadOnIdle");
+	    Y.IdleTimer.start(t);
+	
+	});
+	
+	return Y;
 };
