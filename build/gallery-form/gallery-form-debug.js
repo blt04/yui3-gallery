@@ -80,17 +80,54 @@ Y.mix(Form, {
 		},
 
 		/**
-		 * @attribute errors
-		 * @type Array
-		 * @description An array of errors to be pre-set on form fields. Each error is defined by an object
-		 *				literal containing the properties 'name' (corresponding to a form field) and 'message'
+		 * @attribute inlineValidation
+		 * @type Boolean
+		 * @description Set to true to validate fields "on the fly", where they will
+		 *				validate themselves any time the value attribute is changed
+		 * @default false
 		 */
-		errors : {
-			writeOnce : true,
-			value : [],
-			validator : function(val) {
-				return this._validateErrors(val);
-			}
+		inlineValidation : {
+			value : false,
+			validator : Y.Lang.isBoolean
+		},
+
+		/**
+		 * @attribute resetAfterSubmit
+		 * @type Boolean
+		 * @description If true, the form is reset following a successful submit event 
+		 * @default true
+		 */
+		resetAfterSubmit : {
+			value : true,
+			validator : Y.Lang.isBoolean
+		},
+
+		/**
+		 * @attribute encodingType
+		 * @type Number
+		 * @description Set to Form.MULTIPART_ENCODED in order to use the FileField for uploads
+		 * @default Y.Form.URL_ENCODED
+		 */
+		encodingType : {
+			value : Form.URL_ENCODED,
+			validator : Y.Lang.isNumber
+		},
+		
+		/**
+		 * @attribute skipValidationBeforeSubmit
+		 * @type Boolean
+		 * @description Set to true to skip the validation step when submitting
+		 * @default false
+		 */
+		skipValidationBeforeSubmit : {
+			value : false,
+			validator : Y.Lang.isBoolean
+		},
+		
+		submitViaIO : {
+			value : true,
+			validator : Y.Lang.isBoolean
+>>>>>>> upstream/master:build/gallery-form/gallery-form-debug.js
 		}
 	},
 
@@ -117,7 +154,21 @@ Y.mix(Form, {
 	 * @static
 	 * @description The HTML used to create the form Node
 	 */
-	FORM_TEMPLATE : '<form></form>'
+	FORM_TEMPLATE : '<form></form>',
+
+	/**
+	 * @property Form.URL_ENCODED
+	 * @type Number
+	 * @description Set the form the default text encoding
+	 */
+	URL_ENCODED : 1,
+
+	/**
+	 * @property Form.MULTIPART_ENCODED
+	 * @type Number
+	 * @description Set form to multipart/form-data encoding for file uploads
+	 */
+	MULTIPART_ENCODED : 2
 });
 
 Y.extend(Form, Y.Widget, {
@@ -224,12 +275,18 @@ Y.extend(Form, Y.Widget, {
 						fieldType = Y.HiddenField;
 					} else if (t == 'checkbox') {
 						fieldType = Y.CheckboxField;
+					} else if (t == 'radio') {
+						fieldType = Y.RadioField;
+					} else if (t == 'password') {
+						fieldType = Y.PasswordField;
 					} else if (t == 'textarea') {
 						fieldType = Y.TextareaField;
 					} else if (t == 'select') {
 						fieldType = Y.SelectField;
 					} else if (t == 'choice') {
 						fieldType = Y.ChoiceField;
+					} else if (t == 'file') {
+						fieldType = Y.FileField;
 					} else if (t == 'button' || t == 'submit' || t == 'reset') {
 						fieldType = Y.Button;
 						if (t =='submit') {
@@ -296,7 +353,8 @@ Y.extend(Form, Y.Widget, {
 				o = {
 					type: node.get('type'),
 					name : node.get('name'),
-					value : node.get('value')
+					value : node.get('value'),
+					checked : node.get('checked')
 				};
 
 				if (o.type == 'submit' || o.type == 'reset' || o.type == 'button') {
@@ -378,9 +436,12 @@ Y.extend(Form, Y.Widget, {
 	_syncFormAttributes : function () {
 		this._formNode.setAttrs({
 			action : this.get('action'),
-			method : this.get('method'),
-			id : this.get('id')
-		});    
+			method : this.get('method')
+		});
+
+		if (this.get('encodingType') === Form.MULTIPART_ENCODED) {
+			this._formNode.setAttribute('enctype', 'multipart/form-data');
+		}
 	},
 	
 	/**
@@ -424,31 +485,16 @@ Y.extend(Form, Y.Widget, {
 	},
 
 	/**
-	 * @method _handleIOSuccess
+	 * @method _handleIOEvent
 	 * @protected
+	 * @param {String} eventName
 	 * @param {Number} ioId
 	 * @param {Object} ioResponse
-	 * @description Handles the success event of IO transactions instantiated by this instance
+	 * @description Handles the IO events of transactions instantiated by this instance
 	 */
-	_handleIOSuccess : function (ioId, ioResponse) {
-		if (typeof this._ioIds[ioId] != 'undefined') {
-			this.reset();
-			this.fire('success', {response : ioResponse});
-			delete this._ioIds[ioId];
-		}
-	},
-
-	/**
-	 * @method _handleIOFailure
-	 * @protected
-	 * @param {Number} ioId
-	 * @param {Object} ioResponse
-	 * @description Handles the failure event of the IO transactions instantiated by this instance
-	 */
-	_handleIOFailure : function (ioId, ioResponse) {
-		if (typeof this._ioIds[ioId] != 'undefined') {
-			this.fire('failure', {response : ioResponse});
-			delete this._ioIds[ioId];
+	_handleIOEvent : function (eventName, ioId, ioResponse) {
+		if (this._ioIds[ioId] !== undefined) {
+			this.fire(eventName, {response : ioResponse});
 		}
 	},
 	
@@ -459,9 +505,11 @@ Y.extend(Form, Y.Widget, {
 	reset : function () {
 		this.clearErrors();
 		this._formNode.reset();
-		for (var fields=this.get('fields'), i=0, l=fields.length;i<l;i++) {
-			fields[i].clear();
-		}
+		var fields = this.get('fields');
+		Y.Array.each(fields, function (f, i, a) {
+			f.resetFieldNode();
+			f.set('error', null);
+		});
 	},
 	
 	/**
@@ -469,23 +517,32 @@ Y.extend(Form, Y.Widget, {
 	 * @description Submits the form using the defined method to the URL defined in the action
 	 */
 	submit : function () {
-		if (this._runValidation()) {
+		if (this.get('skipValidationBeforeSubmit') === true || this._runValidation()) {
 			var formAction = this.get('action'),
 				formMethod = this.get('method'),
-				formId = this._formNode.get('id'),
+				submitViaIO = this.get('submitViaIO'),
+				transaction, cfg;
+
+			if (submitViaIO === true) {
 				cfg = {
 					method : formMethod,
-					form : {id : formId}
-				},
+					form : {
+						id : this._formNode,
+						upload : (this.get('encodingType') === Form.MULTIPART_ENCODED)
+					}
+				};
+	
 				transaction = Y.io(formAction, cfg);
-
-			this._ioIds[transaction.id] = transaction;
+				this._ioIds[transaction.id] = transaction;
+			} else {
+				this._formNode.submit();
+			}
 		}
 	},
 	
 	/**
 	 * @method getField
-	 * @param {String | Number} selector
+	 * @param {String|Number} selector
 	 * @description Get a form field by its name attribute or numerical index
 	 */
 	getField : function (selector) {
@@ -516,8 +573,11 @@ Y.extend(Form, Y.Widget, {
 
 		this.publish('submit');
 		this.publish('reset');
+		this.publish('start');
 		this.publish('success');
 		this.publish('failure');
+		this.publish('complete');
+		this.publish('xdr');
 	},
 	
 	destructor : function () {
@@ -537,8 +597,25 @@ Y.extend(Form, Y.Widget, {
 			e.halt();
 		}, this));
 
-		Y.on('io:success', Y.bind(this._handleIOSuccess, this));
-		Y.on('io:failure', Y.bind(this._handleIOFailure, this));
+		this.after('inlineValidationChange', Y.bind(function (e) {
+			if (e.newValue === true) {
+				this._enableInlineValidation();
+			} else {
+				this._disableInlineValidation();
+			}
+		}, this));
+
+		this.after('success', Y.bind(function(e) {
+			if (this.get('resetAfterSubmit') === true) {
+				this.reset();
+			}
+		}, this));
+
+		Y.on('io:start', Y.bind(this._handleIOEvent, this, 'start'));
+		Y.on('io:complete', Y.bind(this._handleIOEvent, this, 'complete'));
+		Y.on('io:xdr', Y.bind(this._handleIOEvent, this, 'xdr'));
+		Y.on('io:success', Y.bind(this._handleIOEvent, this, 'success'));
+		Y.on('io:failure', Y.bind(this._handleIOEvent, this, 'failure'));
 	},
 	
 	syncUI : function () {
@@ -644,6 +721,28 @@ Y.mix(FormField, {
 		required : {
 			value : false,
 			validator : Y.Lang.isBoolean
+		},
+
+		/**
+		 * @attribute validateInline
+		 * @type Boolean
+		 * @default false
+		 * @description Set to true to validate this field whenever it's value is changed
+		 */
+		validateInline : {
+			value : false,
+			validator : Y.Lang.isBoolean
+		},
+		
+		/**
+		 * @attribute disabled
+		 * @type Boolean
+		 * @default false
+		 * @description Set to true to disable the field.
+		 */
+		disabled : {
+		    value : false,
+		    validator : Y.Lang.isBoolean
 		}
 	},
 
@@ -652,21 +751,186 @@ Y.mix(FormField, {
 	 * @type Number
 	 * @description The current tab index of all FormField instances
 	 */
-	tabIndex : 0,
+	tabIndex : 1,
+	
+	/**
+	 * @method FormField.VALIDATE_EMAIL_ADDRESS
+	 * @static
+	 * @description Utility function to validate an email address
+	 */
+	VALIDATE_EMAIL_ADDRESS : function (val, field) {
+		var filter = /^([\w]+(?:\.[\w]+)*)@((?:[\w]+\.)*\w[\w]{0,66})\.([a-z]{2,6}(?:\.[a-z]{2})?)$/i;
+		if (filter.test(val) === false) {
+			field.set('error', FormField.INVALID_EMAIL_MESSAGE);
+			return false;
+		}
+		
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_EMAIL_MESSAGE
+	 * @type String
+	 * @description Message to display when an invalid email address is entered
+	 */
+	INVALID_EMAIL_MESSAGE : "Please enter a valid email address",
+
+	/**
+	 * @method FormField.VALIDATE_PHONE_NUMBER
+	 * @static
+	 * @description Utility function to validate US and international phone numbers
+	 */
+	VALIDATE_PHONE_NUMBER : function(val, field) {
+		var filter = /^((\+\d{1,3}(-| )?\(?\d\)?(-| )?\d{1,5})|(\(?\d{2,6}\)?))(-| )?(\d{3,4})(-| )?(\d{4})(( x| ext)\d{1,5}){0,1}$/;
+		if (filter.test(val) === false) {
+			field.set('error', FormField.INVALID_PHONE_NUMBER);
+			return false;
+		}
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_PHONE_NUMBER
+	 * @type String
+	 * @description Message to display when an invalid phone number is entered
+	 */
+	INVALID_PHONE_NUMBER : "Please enter a valid phone number",
+
+	/**
+	 * @method FormField.VALIDATE_IP_ADDRESS
+	 * @static
+	 * @description Utility function to validate IPv4 addresses
+	 */
+	VALIDATE_IP_ADDRESS : function (val, field) {
+		var filter = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
+			arr, valid = true;
+
+		if (filter.test(val) === false) {
+			valid = false;
+		}
+		
+		arr = val.split(".");
+		Y.Array.each(arr, function (v, i, a) {
+			var n = parseInt(v, 10);
+			if (n < 0 || n > 255) {
+				valid = false;
+			}
+		});
+
+		if (valid === false) {
+			field.set('error', FormField.INVALID_IP_MESSAGE);
+		}
+
+		return valid;
+	},
+
+	/**
+	 * @property FormField.INVALID_IP_MESSAGE
+	 * @type String
+	 * @description Message to display when an invalid IP address is entered
+	 */
+	INVALID_IP_MESSAGE : "Please enter a valid IP address",
+
+	/**
+	 * @method FormField.VALIDATE_DATE
+	 * @static
+	 * @description Utility function to validate dates
+	 */
+	VALIDATE_DATE : function (val, field) {
+		var filter = /^([1-9]|1[0-2])(\-|\/)([0-2][0-9]|3[0-1])(\-|\/)(\d{4}|\d{2})$/;
+		if (filter.test(val) === false) {
+			field.set('error', FormField.INVALID_DATE_MESSAGE);
+			return false;
+		}
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_DATE_MESSAGE
+	 * @type String
+	 * @description Message to display when an invalid date is entered
+	 */
+	INVALID_DATE_MESSAGE : "Please enter a a valid date",
+
+	/**
+	 * @method FormField.VALIDATE_TIME
+	 * @static
+	 * @description Utility function to validate times
+	 */
+	VALIDATE_TIME : function (val, field) {
+		var filter = /^([1-9]|1[0-2]):[0-5]\d(:[0-5]\d(\.\d{1,3})?)?$/;
+		if (filter.test(val) === false) {
+			field.set('error', FormField.INVALID_TIME_MESSAGE);
+			return false;
+		}
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_TIME_MESSAGE
+	 * @type String
+	 * @description Message to display when an invalid time is entered
+	 */
+	INVALID_TIME_MESSAGE : "Please enter a valid time",
+
+	/**
+	 * @method FormField.VALIDATE_POSTAL_CODE
+	 * @static
+	 * @description Utility function to validate US and international postal codes
+	 */
+	VALIDATE_POSTAL_CODE : function (val, field) {
+		var filter,
+			valid = true;
+
+		if (val.length == 6 || val.length == 7) {
+			filter = /^[a-zA-Z]\d[a-zA-Z](-|\s)?\d[a-zA-Z]\d$/;
+		} else if (val.length == 5 || val.length == 10) {
+			filter = /^\d{5}((-|\s)\d{4})?$/;
+		} else if (val.length > 0) {
+			valid = false;
+		}
+
+		if (valid === false || (filter && filter.test(val) === false)) {
+			field.set('error', FormField.INVALID_POSTAL_CODE_MESSAGE);
+			return false;
+		}
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_POSTAL_CODE_MESSAGE
+	 * @type String
+	 * @description Message to display when an invalid postal code is entered
+	 */
+	INVALID_POSTAL_CODE_MESSAGE : "Please enter a valid postal code",
+
+	/**
+	 * @method FormField.VALIDATE_NO_SPECIAL_CHARS
+	 * @static
+	 * @description Utility function to validate only alphanumeric characters
+	 */
+	VALIDATE_NO_SPECIAL_CHARS : function (val, field) {
+		var filter = /^[a-zA-Z0-9]*$/;
+		if(filter.test(val) === false) {
+			field.set('error', FormField.INVALID_SPECIAL_CHARS);
+			return false;
+		}
+		return true;
+	},
+
+	/**
+	 * @property FormField.INVALID_SPECIAL_CHARS
+	 * @type String
+	 * @description Message to display when invalid characters are entered
+	 */
+	INVALID_SPECIAL_CHARS : "Please use only letters and numbers",
 
 	/**
 	 * @property FormField.INPUT_TEMPLATE
 	 * @type String
 	 * @description Template used to draw an input node
 	 */
-	INPUT_TEMPLATE : '<input>',
-	
-	/**
-	 * @property FormField.TEXTAREA_TEMPLATE
-	 * @type String
-	 * @description Template used to draw a textarea node
-	 */
-	TEXTAREA_TEMPLATE : '<textarea></textarea>',
+	INPUT_TEMPLATE : '<input />',
 	
 	/**
 	 * @property FormField.LABEL_TEMPLATE
@@ -676,11 +940,17 @@ Y.mix(FormField, {
 	LABEL_TEMPLATE : '<label></label>',
 
 	/**
-	 * @property FormField.SELECT_TEMPLATE
+	 * @property FormField.REQUIRED_ERROR_TEXT
 	 * @type String
-	 * @description Template used to draw a select node
+	 * @description Error text to display for a required field
 	 */
-	SELECT_TEMPLATE : '<select></select>'
+	REQUIRED_ERROR_TEXT : 'This field is required',
+	
+	/**
+	 * @property FormField.FIELD_ID_SUFFIX
+	 * @type String
+	 */
+	FIELD_ID_SUFFIX : '-field'
 });
 
 Y.extend(FormField, Y.Widget, {
@@ -716,6 +986,82 @@ Y.extend(FormField, Y.Widget, {
 	 */
 	_nodeType : 'text',
 	
+	/**
+	 * @property _initialValue
+	 * @private
+	 * @type String
+	 * @description The initial value set on this field, reset will set the value to this
+	 */
+	_initialValue : null,
+
+	/**
+	 * @method _validateError
+	 * @protected
+	 * @param val {Mixed}
+	 * @description Validates the value passed to the error attribute
+	 * @return {Boolean}
+	 */
+	_validateError : function (val) {
+		if (Y.Lang.isString(val)) {
+			return true;
+		}
+		if (val === null || typeof val == 'undefined') {
+			return true;
+		}
+
+		return false;
+	},
+
+	/**
+	 * @method _validateValidator
+	 * @protected
+	 * @param val {Mixed}
+	 * @description Validates the input of the validator attribute
+	 * @return {Boolean}
+	 */
+	 _validateValidator : function (val) {
+		if (Y.Lang.isString(val)) {
+			var validate = /^(email|phone|ip|date|time|postal|special)$/;
+			if (validate.test(val) === true) {
+				return true;
+			}
+		}
+		if (Y.Lang.isFunction(val)) {
+			return true;
+		}
+		return false;
+	 },
+
+	/**
+	 * @method _setValidator
+	 * @protected
+	 * @param {val} {String|Function}
+	 * @description Sets the validator to the supplied method or if one of the 
+	 *				convenience strings is passed, the corresponding utility
+	 *				validator
+	 * @return {Function}
+	 */
+	 _setValidator : function (val) {
+		Y.log('Set: ' + val);
+		if (val == "email") {
+			return FormField.VALIDATE_EMAIL_ADDRESS;
+		} else if (val == "phone") {
+			return FormField.VALIDATE_PHONE_NUMBER;
+		} else if (val == "ip") {
+			return FormField.VALIDATE_IP_ADDRESS;
+		} else if (val == "date") {
+			return FormField.VALIDATE_DATE;
+		} else if (val == "time") {
+			return FormField.VALIDATE_TIME;
+		} else if (val == "postal") {
+			return FormField.VALIDATE_POSTAL_CODE;
+		} else if (val == "special") {
+			return FormField.VALIDATE_NO_SPECIAL_CHARS;
+		}
+
+		return val;
+	 },
+
 	/**
 	 * @method _renderLabelNode
 	 * @protected
@@ -760,7 +1106,7 @@ Y.extend(FormField, Y.Widget, {
 			this._labelNode.setAttrs({
 				innerHTML : this.get('label')
 			});
-			this._labelNode.setAttribute('for', this.get('id'));
+			this._labelNode.setAttribute('for', this.get('id') + FormField.FIELD_ID_SUFFIX);
 		}
 	},
 
@@ -773,11 +1119,21 @@ Y.extend(FormField, Y.Widget, {
 		this._fieldNode.setAttrs({
 			name : this.get('name'), 
 			type : this._nodeType,
-			id : this.get('id'),
+			id : this.get('id') + FormField.FIELD_ID_SUFFIX,
 			value : this.get('value')
 		});
+		
 		this._fieldNode.setAttribute('tabindex', FormField.tabIndex);
 		FormField.tabIndex++;
+	},
+	
+	_syncDisabled : function (e) {
+	    var dis = this.get('disabled');
+	    if (dis === true) {
+	        this._fieldNode.setAttribute('disabled', 'disabled');
+	    } else {
+	        this._fieldNode.removeAttribute('disabled');
+	    }
 	},
 	
 	/**
@@ -832,26 +1188,40 @@ Y.extend(FormField, Y.Widget, {
 		this.clearError();
 
 		if (!this._checkRequired()) {
-			this.showError('This field is required');
+			this.set('error', FormField.REQUIRED_ERROR_TEXT);
 			return false;
+		} else if (!value) {
+			return true;
 		}
 							
 		return validator.call(this, value);
 	},
 
+	resetFieldNode : function () {
+		this.set('value', this._initialValue);
+		this._fieldNode.set('value', this._initialValue);
+		this.fire('nodeReset');
+	},
+
 	/**
 	 * @method clear
-	 * @description Clears the value of this field
+	 * @description Clears the value AND the initial value of this field
 	 */
 	 clear : function () {
 		this.set('value', '');
 		this._fieldNode.set('value', '');
+		this._initialValue = null;
+		this.fire('clear');
 	},
 
 	initializer : function () {
 		this.publish('blur');
 		this.publish('change');
 		this.publish('focus');
+		this.publish('clear');
+		this.publish('nodeReset');
+		
+		this._initialValue = this.get('value');
 	},
 
 	destructor : function (config) {
@@ -869,14 +1239,51 @@ Y.extend(FormField, Y.Widget, {
 		}, this));
 		
 		this.on('valueChange', Y.bind(function (e) {
-			this._fieldNode.set('value', e.newVal);
-		}, this)); 
+			if (e.src != 'ui') {
+				this._fieldNode.set('value', e.newVal);
+			}			
+		}, this));
+
+		this._fieldNode.on('blur', Y.bind(function (e) {
+			this.set('value', this._fieldNode.get('value'), {src : 'ui'});
+			this.fire('blur', e);
+		}, this));
+
+		this._fieldNode.on('focus', Y.bind(function(e) {
+			this.fire('focus', e);
+		}, this));
+		
+		this.on('errorChange', Y.bind(function (e) {
+			if (e.newVal) {
+				this._showError(e.newVal);
+			} else {
+				this._clearError();
+			}
+		}, this));
+
+		this.on('validateInlineChange', Y.bind(function (e) {
+			if (e.newVal === true) {
+				this._enableInlineValidation();
+			} else {
+				this._disableInlineValidation();
+			}
+		}, this));
+		
+		this.on('disabledChange', Y.bind(function (e) {
+		    this._syncDisabled();
+		}, this));
 	},
 
 	syncUI : function () {
 		this.get('boundingBox').removeAttribute('tabindex');
 		this._syncLabelNode();
 		this._syncFieldNode();
+		this._syncError();
+		this._syncDisabled();
+
+		if (this.get('validateInline') === true) {
+			this._enableInlineValidation();
+		}
 	}
 });
 
@@ -913,14 +1320,72 @@ function CheckboxField () {
 }
 
 Y.mix(CheckboxField, {
-    NAME : 'checkbox-field'
+    NAME : 'checkbox-field',
+
+	ATTRS : {
+		'checked' : {
+			value : false,
+			validator : Y.Lang.isBoolean
+		}
+	}
 });
 
 Y.extend(CheckboxField, Y.FormField, {
-    _nodeType : 'checkbox'
+    _nodeType : 'checkbox',
+
+	_syncChecked : function () {
+		this._fieldNode.set('checked', this.get('checked'));
+	},
+
+	initializer : function () {
+		CheckboxField.superclass.initializer.apply(this, arguments);
+	},
+
+	/*renderUI : function () {
+		this._renderFieldNode();
+		this._renderLabelNode();
+	},*/
+
+	syncUI : function () {
+		CheckboxField.superclass.syncUI.apply(this, arguments);
+		this._syncChecked();
+	},
+
+	bindUI :function () {
+		CheckboxField.superclass.bindUI.apply(this, arguments);
+		this.after('checkedChange', Y.bind(function(e) {
+			if (e.src != 'ui') {
+				this._fieldNode.set('checked', e.newVal);
+			}
+		}, this));
+
+		this._fieldNode.after('change', Y.bind(function (e) {
+			this.set('checked', e.currentTarget.get('checked'), {src : 'ui'});
+		}, this));
+	}
 });
 
 Y.CheckboxField = CheckboxField;
+/**
+ * @class RadioField
+ * @extends CheckboxField
+ * @param config {Object} Configuration object
+ * @constructor
+ * @description A Radio field node
+ */
+function RadioField () {
+    RadioField.superclass.constructor.apply(this,arguments);
+}
+
+Y.mix(RadioField, {
+    NAME : 'radio-field'
+});
+
+Y.extend(RadioField, Y.CheckboxField, {
+    _nodeType : 'radio'
+});
+
+Y.RadioField = RadioField;
 /**
  * @class HiddenField
  * @extends FormField
@@ -996,7 +1461,9 @@ Y.extend(HiddenField, Y.FormField, {
 				this._valueDisplayNode.set('innerHTML', e.newVal);
 			}, this, true));
 		}
-	}
+	},
+
+	clear : function () {}
 });
 
 Y.HiddenField = HiddenField;
@@ -1094,20 +1561,31 @@ Y.extend(ChoiceField, Y.FormField, {
      */
     _validateChoices : function (val) {
         if (!Y.Lang.isArray(val)) {
+			Y.log('Choice values must be in an array');
             return false;
         }
-
-        for (var i=0, l=val.length;i<l;i++) {
+		
+		var i = 0, len = val.length;
+		
+		for (; i < len; i++) {
             if (!Y.Lang.isObject(val[i])) {
-                return false;
+				Y.log('Choice that is not an object cannot be used');
+                delete val[i];
+				continue;
             }
             if (!val[i].label ||
                 !Y.Lang.isString(val[i].label) ||
                 !val[i].value ||
                 !Y.Lang.isString(val[i].value)) {
-                return false;
+					Y.log('Choice without label and value cannot be used');
+					delete val[i];
+					continue;
             }
         }
+		
+		if (val.length === 0) {
+			return false;
+		}
 
         return true;
     },
@@ -1123,48 +1601,26 @@ Y.extend(ChoiceField, Y.FormField, {
     
     _renderFieldNode : function () {
         var contentBox = this.get('contentBox'),
-            choices = this.get('choices'),
-            i=0, l=choices.length,
-            elLabel, elField;
-        
-        for(;i<l;i++) {
-            elLabel = Y.Node.create(FormField.LABEL_TEMPLATE);
-            contentBox.appendChild(elLabel);
-            
-            elField = Y.Node.create(FormField.INPUT_TEMPLATE);
-            contentBox.appendChild(elField);
-        }
+            choices = this.get('choices');
+       
+		Y.Array.each(choices, function(c, i, a) {
+			var cfg = {
+					value : c.value,
+					id : (this.get('id') + '_choice' + i),
+					name : this.get('name'),
+					label : c.label
+				},
+				fieldType = (this.get('multiple') === true ? Y.CheckboxField : Y.RadioField),
+				field = new fieldType(cfg);
+			
+			field.render(contentBox);
+        }, this);
 
 		this._fieldNode = contentBox.all('input');
     },
 
-	_syncFieldNode : function () {
-		var choices = this.get('choices'),
-			contentBox = this.get('contentBox'),
-			labels = contentBox.all('label'),
-			choiceType = (this.get('multiple') === true ? 'checkbox' : 'radio');
+	_syncFieldNode : function () {},
 
-		labels.each(function (node, index, list) {
-			node.setAttrs({
-				innerHTML : choices[index].label
-			});
-			node.setAttribute('for', (this.get('id') + '_choice' + index));
-		}, this);
-
-		this._fieldNode.each(function (node, index, list) {
-			node.setAttrs({
-				value : choices[index].value,
-				id : (this.get('id') + '_choice' + index),
-				name : this.get('name'),
-				type : choiceType
-			});
-
-			// Setting value above doesn't seem to work (bug?), this forces it
-			var domNode = Y.Node.getDOMNode(node);
-			domNode.value = choices[index].value;
-		}, this);
-	},
-            
     clear : function () {
         this._fieldNode.each(function (node, index, list) {
             node.setAttribute('checked', false);
@@ -1212,7 +1668,28 @@ Y.mix(SelectField, {
 	 * @type String
 	 * @description Template used to draw an option node
 	 */
-	 OPTION_TEMPLATE : '<option></option>'
+	OPTION_TEMPLATE : '<option></option>',
+
+	/**
+	 * @property SelectField.DEFAULT_OPTION_TEXT
+	 * @type String
+	 * @description The display title of the default choice in the select box
+	 */
+	DEFAULT_OPTION_TEXT : 'Choose one',
+	
+	ATTRS : {
+	    /**
+	     * @attribute useDefaultOption
+	     * @type Boolean
+	     * @default true
+	     * @description If true, the first option will use the DEFAULT_OPTION_TEXT
+	     *              to create a blank option
+	     */
+	    useDefaultOption : {
+	        validator : Y.Lang.isBoolean,
+	        value : true
+	    }
+	}
 });
 
 Y.extend(SelectField, Y.ChoiceField, {
@@ -1244,8 +1721,14 @@ Y.extend(SelectField, Y.ChoiceField, {
         var choices = this.get('choices'),
             i=0, l=choices.length, 
             elOption;
-        
-        for(;i<=l;i++) {
+       
+		// Create the "Choose one" option
+		if (this.get('useDefaultOption') === true) {
+    		elOption = Y.Node.create(SelectField.OPTION_TEMPLATE);
+    		this._fieldNode.appendChild(elOption);
+		}
+
+		Y.Array.each(choices, function (c, i, a) {
 			elOption = Y.Node.create(SelectField.OPTION_TEMPLATE);
             this._fieldNode.appendChild(elOption);
         }
@@ -1257,9 +1740,9 @@ Y.extend(SelectField, Y.ChoiceField, {
 	 * @description Syncs the select node with the instance attributes
 	 */
 	_syncFieldNode : function () {
+		SelectField.superclass.constructor.superclass._syncFieldNode.apply(this, arguments);
+
 		this._fieldNode.setAttrs({
-			name : this.get('name'), 
-			id : this.get('id'),
 			multiple : (this.get('multiple') === true ? 'multiple' : '')
 		});
 	},
@@ -1272,16 +1755,32 @@ Y.extend(SelectField, Y.ChoiceField, {
 	_syncOptionNodes : function () {
         var choices = this.get('choices'),
 			contentBox = this.get('contentBox'),
-			options = contentBox.all('option');
+			options = contentBox.all('option'),
+			useDefaultOption = this.get('useDefaultOption'),
+			currentVal = this.get('value');
+
+        if (useDefaultOption === true) {
+            choices.unshift({
+                label : SelectField.DEFAULT_OPTION_TEXT,
+                value : ''
+            });
+        }
 
 		options.each(function(node, index, nodeList) {
-			var label = (index === 0 ? 'Choose one' : choices[index - 1].label),
-				val = (index === 0 ? '' : choices[index - 1].value);
+			var label = choices[index].label,
+				val = choices[index].value;
 
 			node.setAttrs({
 				innerHTML : label,
 				value : val
 			});
+
+			if (currentVal == val) {
+				node.setAttrs({
+					selected : true,
+					defaultSelected : true
+				});
+			}
 		}, this);
 	},
     
@@ -1359,6 +1858,8 @@ Y.extend(Button, Y.FormField, {
             innerHTML : this.get('label'),
             id : this.get('id')
         });
+        
+        this.get('contentBox').addClass('first-child');
 	},
 
 	_setClickHandler : function () {
@@ -1382,6 +1883,40 @@ Y.extend(Button, Y.FormField, {
 });
 
 Y.Button = Button;
+/**
+ * @class FileField
+ * @extends FormField
+ * @param config {Object} Configuration object
+ * @constructor
+ * @description A file field node
+ */
+function FileField () {
+    FileField.superclass.constructor.apply(this,arguments);
+}
+ 
+Y.mix(FileField, {
+    NAME : 'file-field',
+
+	FILE_INPUT_TEMPLATE : '<input type="file" />'
+});
+ 
+Y.extend(FileField, Y.FormField, {
+    _nodeType : 'file',
+
+	_renderFieldNode : function () {
+		var contentBox = this.get('contentBox'),
+			field = contentBox.query('#' + this.get('id'));
+				
+		if (!field) {
+			field = Y.Node.create(FileField.FILE_INPUT_TEMPLATE);
+			contentBox.appendChild(field);
+		}
+
+		this._fieldNode = field;
+	}
+});
+ 
+Y.FileField = FileField;
 
 
-}, 'gallery-2009.11.09-19' ,{requires:['node', 'attribute', 'widget', 'io-form', 'substitute']});
+}, 'gallery-2010.05.21-18-16' ,{requires:['node', 'widget-base', 'widget-htmlparser', 'io-form']});
