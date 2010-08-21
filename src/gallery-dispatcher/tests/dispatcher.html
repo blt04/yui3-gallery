@@ -1,21 +1,27 @@
+<!doctype html>
 <html>
 <head>
 <title>Dispatcher Tests</title>
 <script type="text/javascript" src="http://yui.yahooapis.com/3.1.1/build/yui/yui-min.js"></script>
 </head>
 <body class="yui3-skin-sam">
+
     <h1>Dispatcher Tests</h1>
-    <div id="c"></div>
     <div id="demo">
       <p>Placeholder for dispatcher tests</p>
     </div>
+
 <script type="text/javascript" src="../../../build/gallery-dispatcher/gallery-dispatcher-debug.js"></script>
 <script type="text/javascript">
-    
 YUI({
     useConsoleOutput: true,
     logInclude: { TestRunner: true }
 }).use('test', 'console', 'gallery-dispatcher', function (Y) {
+
+  (new Y.Console({
+      verbose: true,
+      newestOnTop: false
+  })).render();
 
   Y.namespace("Tests");
 
@@ -208,18 +214,11 @@ YUI({
 
   })();
 
-
-  (new Y.Console({
-      verbose: true,
-      newestOnTop: false
-  })).render('#c');
-
   //add to the testrunner and run
   Y.Test.Runner.add(Y.Tests.Dispatcher);
   Y.Test.Runner.run();
   
 });
-
 </script>
 </body>
 </html>
