@@ -48,32 +48,33 @@ YUI({
               // global variable
               iframeTemplate = '<iframe border="0" frameBorder="0" marginWidth="0" marginHeight="0" leftMargin="0" topMargin="0" allowTransparency="true" width="1px" height="1px"></iframe>';
               iframeURL = './iframe.html';
-              Y.one('#demo').set('innerHTML', 'Placeholder for the tests').removeClass('passed');
+              Y.one('#demo').set('innerHTML', 'Placeholder for the tests');
           },
 
           tearDown: function() {
-              Y.one('iframe').remove();
+             // Y.one('iframe').remove();
+              Y.one('#demo').removeClass('passed').removeClass('iframe-global-event-captured-by-document').removeClass('document-global-event-captured-by-iframe');
           },
 
           //---------------------------------------------------------------------
           // Tests
           //---------------------------------------------------------------------
           testBasicIframe: function() {
-              var d = Y.one('#demo');
               Y.one('body').append(Y.Node.create(iframeTemplate).setStyle('visibility', 'hidden').set('src', iframeURL));
               this.wait (function () {
-                Assert.areEqual(d.hasClass('passed'), true, 'The class [passed] was not correctly applied by the iframe code.');
+                Assert.isTrue(Y.one('#demo').hasClass('passed'), 'The iframe fails to access to the parent window dom structure.');
               }, 1000);
           },
           
           testCapturingGlobalEvent: function() {
               var that = this;
               Y.Global.on('iframe-global-event', function() {
-                  Assert.isTrue(true);
-                  that.resume();
+                  Y.one('#demo').addClass('iframe-global-event-captured-by-document');
               });
               Y.one('body').append(Y.Node.create(iframeTemplate).setStyle('visibility', 'hidden').set('src', iframeURL));
-              that.wait();
+              this.wait (function () {
+                Assert.isFalse(Y.one('#demo').hasClass('iframe-global-event-captured-by-document'), 'The iframe is polluting the parent window with broadcast messages.');
+              }, 1000);
           },
           
           testFiringGlobalEvent: function() {
@@ -81,7 +82,7 @@ YUI({
               Y.one('body').append(Y.Node.create(iframeTemplate).setStyle('visibility', 'hidden').set('src', iframeURL));
               this.wait (function () {
                 Y.Global.fire('document-global-event');
-                Assert.areEqual(d.hasClass('global-captured'), false, 'The class [global-captured] was not correctly applied by the iframe listener.');
+                Assert.isFalse(Y.one('#demo').hasClass('document-global-event-captured-by-iframe'), 'The iframe is being polluted by the parent window through broadcast messages.');
               }, 1000);
           }
 
