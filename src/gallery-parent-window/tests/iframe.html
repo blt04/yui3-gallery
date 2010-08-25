@@ -12,7 +12,7 @@ YUI().use('gallery-parent-window', function (iY) {
     d.setContent('iframe injected content').addClass ('passed');
     pY.Global.fire ('iframe-global-event');
     pY.Global.on ('document-global-event', function() {
-      d.addClass ('global-captured');
+      d.addClass ('document-global-event-captured-by-iframe');
     });
   })
 

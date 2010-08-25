@@ -56,6 +56,8 @@ Y.ParentWindow = YUI({
 		// loading modules in the iframe doc
 		Y.log('Adding new modules to iframe instance', 'info', 'gallery-parent-window');
 		Y.use.apply(Y, args);
+		// chaining 
+		return P;
 	};
 
 });
