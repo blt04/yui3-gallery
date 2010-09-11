@@ -84,6 +84,19 @@ YUI({
                 Y.Global.fire('document-global-event');
                 Assert.isFalse(Y.one('#demo').hasClass('document-global-event-captured-by-iframe'), 'The iframe is being polluted by the parent window through broadcast messages.');
               }, 200);
+          },
+
+          _testDynamicIframeInjection: function() {
+              var that = this;
+              
+              var iframe = document.createElement('iframe'),
+                  doc = iframe.contentWindow.document;
+              doc.open().write('<body onload="YUI_config={custom:{a:1}};var d=document;d.getElementsByTagName(\'head\')[0].appendChild(d.createElement(\'script\')).src=\'inject.js\'">');
+              doc.close();
+              
+              this.wait (function () {
+                Assert.isTrue(Y.one('#demo').hasClass('passed'), 'The iframe fails to access to the parent window dom structure.');
+              }, 1000);
           }
 
       }));
