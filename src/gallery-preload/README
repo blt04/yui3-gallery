@@ -1,0 +1,10 @@
+Preload
+    Port of Stoyan Stefanov's JavaScript preload() function.
+    More info at http://yuilibrary.com/gallery/show/preload
+
+HEAD
+    * Tested on YUI 3.2.0
+
+2010.08.18-17-12
+    * Tested on YUI 3.1.1
+    * Initial release
