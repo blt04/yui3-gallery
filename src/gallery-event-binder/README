@@ -1,4 +1,4 @@
-Parent Window Utility
+Event Binder Utility
     Binding user actions until a particular YUI instance become ready, 
     and the listeners defined before flushing those events through a 
     queue. This will help to catch some early user interactions due the 
