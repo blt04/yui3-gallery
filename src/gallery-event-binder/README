@@ -1,0 +1,18 @@
+Parent Window Utility
+    Binding user actions until a particular YUI instance become ready, 
+    and the listeners defined before flushing those events through a 
+    queue. This will help to catch some early user interactions due the 
+    on-demand nature of YUI 3. 
+    More info at http://yuilibrary.com/gallery/show/event-binder
+
+HEAD
+    * Tested on YUI 3.2.0
+
+2010.06.30-19-54
+    * Bugfixes
+
+2010.06.23-18-37
+    * Bugfixes
+
+2010.06.07-17-52
+    * Initial release
