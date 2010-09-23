@@ -438,4 +438,4 @@ Y.Dispatcher = Y.Base.create(DISPATCHER, Y.Base, [], {
 });
 
 
-}, '@VERSION@' ,{requires:['base', 'node-base', 'io-base', 'get', 'async-queue', 'classnamemanager']});
+}, 'gallery-2010.09.15-18-40' ,{requires:['base', 'node-base', 'io-base', 'get', 'async-queue', 'classnamemanager']});
