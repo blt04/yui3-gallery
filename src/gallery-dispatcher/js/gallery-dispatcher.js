@@ -237,7 +237,7 @@ Y.Dispatcher = Y.Base.create(DISPATCHER, Y.Base, [], {
                         var d = jsNode.get('ownerDocument'),
                         h = d.one('head') || d.get('documentElement'),
                         // creating a new script node to execute the inline javascrip code
-                        newScript = Y.Node.create('<' + SC + '></' + SC + '>');
+                        newScript = Y.one(document.createElement(SC));
                         if (jsNode._node.text) {
                             newScript._node.text = jsNode._node.text;
                         }
